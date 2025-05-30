@@ -1,6 +1,19 @@
 
 ```datacorejsx
-// Constants and color configuration
+// Config
+// Vault_name is important, if you wanna use advancedURI to have Links to your Journals
+const VAULT_NAME = "obsidianSync";
+// This is important where the script should look for the Journals. In the journals the information will be saved in the metadata
+const JOURNAL_PATH = "Journal/Tag/2025";
+// True: last Journal will be left. False: last journal will be on the right.
+const REVERSE_ORDER = true; 
+// Here you can define your habits. Following values are possible:
+// id: is more for the code just put a text in it.
+// emoji: is the icon which will be shown
+// Label: is the text, that will be shown
+// isBoolean: true. Use this, if you want to have a "just true or false" value. You did Meditate. You don't mind if 5 or 30 minutes. You still will have to set defaultDuration: 1 .
+// defaultDuration: x. This is good if you want to set a value for a habit. If you click the button it will always put x in it.
+// isincremental: whis will increment/fill up the habit. I use it for drinking - for every glas of water i click one time on the button to log it.
 const HABITS = [
   { id: 'Aufstehen', emoji: '🌄', label: 'Getting up at 6 a.m', isBoolean: true, defaultDuration: 1, monthlyGoal: 20 },
   { id: 'Journaling', emoji: '✍️', label: 'Journaling', isBoolean: true, defaultDuration: 1, monthlyGoal: 25 },
@@ -37,20 +50,42 @@ const COLORS = {
 
 // Utility Functions
 const formatMetricValue = (value, habit) => {
-  if (habit.isBoolean) return '';
   if (value === null || value === undefined) return '0';
 
   switch(habit.unit) {
     case 'minutes':
       return value === 1 ? '1 Minute' : `${value} Minutes`;
-    case 'glas':
-      return value === 1 ? '1 Glas' : `${value} Gläser`;
-    case 'gemacht':
-      return value === 1 ? '1 gemacht' : `${value} gemacht`;
+    case 'dollars':
+      return `$${Number(value).toLocaleString()}`;
+    case 'rupees':
+      return `Rs. ${Number(value).toLocaleString()}`;
     default:
       return value;
   }
 };
+
+function formatDate(date) {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function getJournalPath(date) {
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const day = formatDate(date);
+  return `${JOURNAL_PATH}/${mm}/${day}`;
+}
+
+function getAdvancedUriLink(date) {
+  const path = getJournalPath(date);
+  // encode nur spezielle Zeichen, nicht die Slashes
+  const encodedPath = path
+    .split('/')
+    .map(segment => encodeURIComponent(segment))
+    .join('/');
+  return `obsidian://advanced-uri?vault=${encodeURIComponent(VAULT_NAME)}&filepath=${encodedPath}`;
+}
 
 const calculateTrendPercentage = (current, previous) => {
   if (previous === 0) return current > 0 ? 100 : 0;
@@ -137,8 +172,8 @@ const TimeInput = ({
   getHabitStatus,
   getHabitDuration
 }) => {
-  const habit = HABITS.find(h => h.id === habitId);
-  if (habit.isBoolean) return null;
+  const habit = HABITS.find(h => h.id === habitId);
+  if (habit.isBoolean) return null;
   const duration = getHabitDuration(entry, habitId);
   const isEditing = editingTime?.entryPath === entry.$path && editingTime?.habitId === habitId;
 
@@ -323,10 +358,10 @@ const CalendarView = ({
     }}>
       <div style={{
         display: 'flex',
-        flexDirection: 'row-reverse',
         gap: '12px',
         overflowX: 'auto',
         paddingBottom: '12px',
+        flexDirection: REVERSE_ORDER ? 'row-reverse' : 'row',
         WebkitOverflowScrolling: 'touch',
         scrollbarWidth: 'none',
         msOverflowStyle: 'none',
@@ -382,8 +417,11 @@ const CalendarDayCard = ({
 }) => {
   const completedCount = calculateCompletedHabits(entry);
   const completionPercentage = entry ? Math.round((completedCount / HABITS.length) * 100) : 0;
+  const journalLink = getAdvancedUriLink(date.toJSDate());
+  
 
   return (
+	
     <div style={{
       padding: '12px',
       borderRadius: '16px',
@@ -397,6 +435,7 @@ const CalendarDayCard = ({
       gap: '8px',
       minHeight: '168px'
     }}>
+    <a href={journalLink} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -405,6 +444,7 @@ const CalendarDayCard = ({
         padding: '8px 12px',
         borderRadius: '10px'
       }}>
+      
         <span style={{
           fontSize: '1em',
           fontWeight: '600',
@@ -412,15 +452,16 @@ const CalendarDayCard = ({
         }}>
           {DAYS[date.weekday % 7]}
         </span>
-
-       <span style={{
+        <span style={{
           fontWeight: '500',
           fontSize: '0.9em',
           color: COLORS.textPrimary
         }}>
           {date.toFormat('MM-dd')}
-        </span> 
+        </span>
       </div>
+      </a>
+	
 
       {entry && (
         <>
@@ -1265,7 +1306,7 @@ function HabitTracker() {
   // Data Queries and Utility Functions
   const dailyNotes = dc.useQuery(`
     @page 
-    AND path("Journal/Tag/2025")
+    AND path("${JOURNAL_PATH}")
   `);
 
   const sortedNotes = dc.useMemo(() => {
